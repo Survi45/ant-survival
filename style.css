@@ -102,8 +102,8 @@ button[disabled]{ opacity:0.5; cursor:default; }
 
 #joystickBase {
   position: relative;
-  width: 100%;
-  height: 100%;
+  width: 170px;
+  height: 1170px;
   background: rgba(255, 255, 255, 0.15);
   border-radius: 50%;
   display: flex;
@@ -113,8 +113,8 @@ button[disabled]{ opacity:0.5; cursor:default; }
 
 #joystickStick {
   position: absolute;
-  width: 50%;
-  height: 50%;
+  width: 95px;
+  height: 95px;
   background: rgba(255, 255, 255, 0.35);
   border-radius: 50%;
   transform: translate(0px, 0px);

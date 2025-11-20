@@ -1,9 +1,4 @@
-// game.js — FULL final version (copy-paste this entire file)
-// - Player is created only on START (so on-load shows only watermark/logo as you wanted).
-// - Joystick is fully functional (touch + mouse), centered bottom, smooth movement like PUBG-style.
-// - Stick recenters on release with a smooth transition.
-// - No fade/alpha side-effects on enemies or player.
-// - No other files changed.
+// game.js — FULL final version 
 
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
