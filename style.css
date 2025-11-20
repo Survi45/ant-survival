@@ -1,6 +1,7 @@
+/* style.css - UI polish and watermark + lighter canvas background */
 :root{
   --bg:#0e0e0e;
-  --panel:#f6f7f8;
+  --panel:#f6f7f8; /* light panel so black enemy visible */
   --panelAlpha: rgba(246,247,248,0.06);
   --accent:#ff7a2e;
   --muted:#999;
@@ -20,8 +21,10 @@ body{
 .topbar img{ width:48px; height:48px; border-radius:8px; object-fit:cover; }
 .topbar h1{ margin:0; font-size:20px; letter-spacing:0.4px; color:#f1f6f5;}
 
+/* main area */
 main{ width:100%; max-width:1000px; padding:8px; display:flex; flex-direction:column; align-items:center; gap:12px; }
 
+/* canvas wrapper to manage watermark overlay */
 .canvasWrap{
   position:relative;
   width:800px;
@@ -31,6 +34,7 @@ main{ width:100%; max-width:1000px; padding:8px; display:flex; flex-direction:co
   align-items:center;
 }
 
+/* watermark centered, soft and non-interactive */
 #watermark{
   position:absolute;
   inset:0;
@@ -38,16 +42,17 @@ main{ width:100%; max-width:1000px; padding:8px; display:flex; flex-direction:co
   width:80%;
   max-width:550px;
   height:80%;
-  background-image: url("images/logo.png");
+  background-image: url("images/logo.png"); /* using same image filename you already have */
   background-position:center;
   background-repeat:no-repeat;
   background-size:contain;
   opacity:0.13;
   pointer-events:none;
-  filter:brightness(0.9);
-  z-index:0;
+  filter:none;
+  z-index:-1;
 }
 
+/* canvas - lighter panel so black enemies visible */
 #gameCanvas{
   background: var(--panelAlpha);
   border-radius:6px;
@@ -57,17 +62,21 @@ main{ width:100%; max-width:1000px; padding:8px; display:flex; flex-direction:co
   z-index:1;
 }
 
+/* UI */
 #ui{ width:90%; max-width:800px; display:flex; gap:18px; justify-content:space-between; flex-wrap:wrap; color:var(--muted); }
 #ui div{ font-size:15px; color:#e8f1ef; }
 
+/* controls */
 .controls{ display:flex; gap:8px; }
 button{
   background:var(--accent); color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:600;
 }
 button[disabled]{ opacity:0.5; cursor:default; }
 
+/* messages */
 .message{ position:fixed; top:22px; left:50%; transform:translateX(-50%); background:#ffea00; color:#000; padding:8px 14px; border-radius:6px; display:none; font-weight:700; }
 
+/* popup */
 .popup{
   position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
   background:var(--popup); padding:18px 22px; border-radius:8px; border:2px solid rgba(255,255,255,0.06); z-index:9999;
@@ -78,35 +87,48 @@ button[disabled]{ opacity:0.5; cursor:default; }
 .popup button{ background: #38a169; }
 .popup button#backBtn{ background:#e53e3e; }
 
-/* joystick */
-#joystickZone{
-  display:none;
-  position:fixed;
-  bottom:20px;
-  left:20px;
-  width:120px;
-  height:120px;
-  z-index:10000;
+/* --- Mobile / Tablet Joystick --- */
+#joystickZone {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 120px;
+  z-index: 999;
+  display: none; /* JS will show on mobile */
+  touch-action: none;
 }
-#joystickBase{
-  position:relative;
-  width:100%; height:100%;
-  background:rgba(255,255,255,0.08);
-  border-radius:50%;
-  touch-action:none;
+
+#joystickBase {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
-#joystickStick{
-  position:absolute;
-  left:50%; top:50%;
-  width:60px; height:60px;
-  background:rgba(255,255,255,0.3);
-  border-radius:50%;
-  transform:translate(-50%,-50%);
-  touch-action:none;
+
+#joystickStick {
+  position: absolute;
+  width: 50%;
+  height: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  transform: translate(0px, 0px);
+  transition: transform 0.08s ease-out; /* smooth return to center */
+  pointer-events: none;
 }
 
 @media (max-width:820px){
-  #gameCanvas{ width:95%; height:calc(95vw*0.625); }
+  #gameCanvas{ width:95%; height:calc(95vw*0.625); } /* keep aspect */
   .topbar{ padding:8px; }
   .canvasWrap { width:95%; }
+}
+
+/* small accessibility improvement: show joystick on hover for desktop testing */
+@media (hover:hover) and (pointer:coarse) {
+  #joystickZone { display:block; }
 }
