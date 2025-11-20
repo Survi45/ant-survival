@@ -1,6 +1,4 @@
-// game.js — FULL final version (mobile-only larger joystick, smooth movement)
-// --- Integrates with your existing player.js, enemy.js, storage.js, etc. ---
-// Replace your current game.js with this full content (copy-paste).
+// game.js — FULL final version 
 
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
@@ -209,15 +207,8 @@ function onCanvasClick(e){
 canvas.addEventListener("click", onCanvasClick);
 canvas.addEventListener("touchstart", function(e){ e.preventDefault(); onCanvasClick(e); }, { passive:false });
 
-/* ---------- JOYSTICK HANDLER (mobile-only, larger, stable) ---------- */
-/*
- Goals:
-  - Joystick visible only on mobile/tablet (hidden on desktop)
-  - Bigger size (configurable here)
-  - Stick snaps back to center smoothly on release
-  - Movement vector normalized (-1..1)
-  - Movement applied smoothly in loop scaled by dt
-*/
+/* ---------- JOYSTICK HANDLER ---------- */
+
 
 // Elements (must match your HTML)
 const joystickZone = document.getElementById("joystickZone");
@@ -504,9 +495,7 @@ window.onload = () => {
   updateUI();
   showMessage("Press START to play", 1500);
 
-  // IMPORTANT: Do NOT create player here (so the canvas shows only watermark/logo on load).
-  // Player will be created at startGame() so there's no blurry placeholder at page load.
-
+  
   // Configure joystick display & sizing for mobile (hide on desktop)
   configureJoystickDisplay();
 
