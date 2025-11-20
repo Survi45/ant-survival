@@ -1,6 +1,20 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
+// Responsive canvas display (keeps internal resolution 800x500)
+function resizeCanvas() {
+  const maxWidth = window.innerWidth * 0.95;
+  const maxHeight = window.innerHeight * 0.7;
+  const aspect = 800 / 500;
+  let w = maxWidth;
+  let h = w / aspect;
+  if (h > maxHeight) { h = maxHeight; w = h * aspect; }
+  canvas.style.width = w + "px";
+  canvas.style.height = h + "px";
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
 let lastTime = performance.now();
 let running = false;
 let paused = false;
@@ -11,7 +25,7 @@ let particles = [];
 let spawnTimer = 0;
 let spawnInterval = 1200;
 
-let levelScore = 0;   // resets every level
+let levelScore = 0;
 let kills = 0;
 let level = 1;
 let totalShots = 0;
@@ -23,7 +37,7 @@ const comboWindow = 900;
 let player = null;
 let rafId = null;
 
-const LEVEL_DURATION = 120 * 1000; // per-level duration
+const LEVEL_DURATION = 120 * 1000;
 let levelStartAt = null;
 
 let currentHighScore = Storage.loadHighScore() || 0;
@@ -43,6 +57,65 @@ const levelPopup = document.getElementById("levelPopup");
 const popupText = document.getElementById("popupText");
 const highPopup = document.getElementById("highPopup");
 const highPopupText = document.getElementById("highPopupText");
+
+// joystick setup (centered)
+let joystick = { active: false, startX: 0, startY: 0, dx: 0, dy: 0 };
+const joystickZone = document.getElementById("joystickZone");
+const joystickStick = document.getElementById("joystickStick");
+
+// Only enable joystick on mobile/tablet
+const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+function updateJoystickMovement() {
+  if (player && joystick.active) {
+    const maxDist = 50;
+    player.moveX = joystick.dx / maxDist;
+    player.moveY = joystick.dy / maxDist;
+  } else if (player) {
+    player.moveX = 0;
+    player.moveY = 0;
+  }
+}
+
+if (isTouchDevice) {
+  joystickZone.style.display = "block";
+
+  joystickZone.addEventListener("touchstart", function (e) {
+    const t = e.touches[0];
+    joystick.active = true;
+    joystick.startX = t.clientX;
+    joystick.startY = t.clientY;
+    joystick.dx = 0; joystick.dy = 0;
+  });
+
+  joystickZone.addEventListener("touchmove", function (e) {
+    if (!joystick.active) return;
+    const t = e.touches[0];
+    joystick.dx = t.clientX - joystick.startX;
+    joystick.dy = t.clientY - joystick.startY;
+
+    const maxDist = 50;
+    const dist = Math.sqrt(joystick.dx * joystick.dx + joystick.dy * joystick.dy);
+    if (dist > maxDist) {
+      const scale = maxDist / dist;
+      joystick.dx *= scale;
+      joystick.dy *= scale;
+    }
+
+    joystickStick.style.transform = `translate(${joystick.dx}px, ${joystick.dy}px)`;
+    updateJoystickMovement();
+    e.preventDefault();
+  }, { passive: false });
+
+  joystickZone.addEventListener("touchend", function () {
+    joystick.active = false;
+    joystick.dx = 0; joystick.dy = 0;
+    joystickStick.style.transform = `translate(0px,0px)`;
+    updateJoystickMovement();
+  });
+} else {
+  joystickZone.style.display = "none"; // hide on desktop
+}
 
 // hook popup buttons
 document.getElementById("nextLevelBtn").onclick = () => {
@@ -72,134 +145,59 @@ document.getElementById("backBtn").onclick = () => {
   updateUI();
 };
 
-// scoring per enemy type
 const scorePerType = { normal: 12, gold: 75 };
 
-// keyboard
 window.addEventListener("keydown", e => keys[e.key] = true);
 window.addEventListener("keyup", e => keys[e.key] = false);
 
-// helpers
-function randRange(a,b){ return a + Math.random() * (b - a); }
+function randRange(a, b) { return a + Math.random() * (b - a); }
 
-/* ---- UPDATED spawn logic: level-based golden spawn chance, gold size & speed tweak ---- */
-function spawnEnemyByLevel(){
+function spawnEnemyByLevel() {
   const baseSpeed = 0.6 + Math.random() * 1.0;
   const y = randRange(40, canvas.height - 40);
   const x = canvas.width + 20;
-
   const goldChance = Math.min(0.05 + (level * 0.03), 0.40);
   const isGold = Math.random() < goldChance;
-
   const size = isGold ? 34 : 22 + Math.min(20, level * 2);
   const speed = baseSpeed * (isGold ? 1.2 : 1);
-
   enemies.push(new Ant({ x, y, type: isGold ? "gold" : "normal", size, speed }));
 }
 
-/* ---- JOYSTICK SETUP ---- */
-const joystick = {
-  zone: document.getElementById("joystickZone"),
-  base: document.getElementById("joystickBase"),
-  stick: document.getElementById("joystickStick"),
-  active: false,
-  deltaX: 0,
-  deltaY: 0,
-  maxDistance: 40
-};
-
-joystick.zone.addEventListener("touchstart", (e)=>{
-  e.preventDefault();
-  joystick.active = true;
-}, { passive:false });
-
-joystick.zone.addEventListener("touchmove", (e)=>{
-  if (!joystick.active) return;
-  const rect = joystick.base.getBoundingClientRect();
-  const touch = e.touches[0];
-  let dx = touch.clientX - (rect.left + rect.width/2);
-  let dy = touch.clientY - (rect.top + rect.height/2);
-
-  const dist = Math.sqrt(dx*dx + dy*dy);
-  if (dist > joystick.maxDistance){
-    dx = dx / dist * joystick.maxDistance;
-    dy = dy / dist * joystick.maxDistance;
-  }
-
-  joystick.deltaX = dx;
-  joystick.deltaY = dy;
-
-  joystick.stick.style.transform = `translate(${dx}px, ${dy}px)`;
-}, { passive:false });
-
-joystick.zone.addEventListener("touchend", ()=>{
-  joystick.active = false;
-  joystick.deltaX = 0;
-  joystick.deltaY = 0;
-  joystick.stick.style.transform = `translate(0px,0px)`; // return center
-});
-
-function updatePlayerWithJoystick(dt){
-  if (!player || !joystick.active) return;
-
-  const moveX = joystick.deltaX / joystick.maxDistance * player.speed;
-  const moveY = joystick.deltaY / joystick.maxDistance * player.speed;
-
-  player.x += moveX;
-  player.y += moveY;
-
-  const half = player.size / 2;
-  player.x = Math.max(half, Math.min(canvas.width - half, player.x));
-  player.y = Math.max(half, Math.min(canvas.height - half, player.y));
-
-  if (moveX < 0) player.facing = "left";
-  else if (moveX > 0) player.facing = "right";
-}
-
-/* ---- START / PAUSE / RESUME / STOP / RESTART ---- */
-function startGame(){
+function startGame() {
   if (running) return;
   const saved = Storage.loadLevel();
   level = saved ? saved : 1;
-
   running = true;
   paused = false;
-
-  // ensure canvas is ready before player init
   player = new Player(canvas);
-  player.x = canvas.width * 0.12;
-  player.y = canvas.height * 0.5;
-
   spawnTimer = 0;
   lastTime = performance.now();
-
   levelScore = 0;
   kills = 0;
   spawnInterval = 1200;
   levelStartAt = Date.now();
-
   currentHighScore = Storage.loadHighScore() || 0;
   ui.highScoreBox.innerText = currentHighScore;
-
   if (!rafId) loop();
   showMessage("Game started — Good luck!");
   updateUI();
-
-  // show joystick only on mobile/tablet
-  if (/Mobi|Android|iPad|iPhone/i.test(navigator.userAgent)) {
-    joystick.zone.style.display = "block";
-  } else {
-    joystick.zone.style.display = "none";
-  }
 }
 
-function pauseGame(){ if (!running) return; paused = true; showMessage("Paused"); }
-function resumeGame(){ if (!running) return; paused = false; lastTime = performance.now(); showMessage("Resumed", 900); }
-function stopGame(){ running = false; paused = false; enemies = []; particles = []; levelScore = 0; kills = 0; level = Storage.loadLevel() || 1; levelStartAt = null; updateUI(); showMessage("Game stopped"); if (rafId){ cancelAnimationFrame(rafId); rafId = null; } }
-function restartGame(){ enemies = []; particles = []; levelScore = 0; kills = 0; level = Storage.loadLevel() || 1; spawnInterval = 1200; running = false; startGame(); }
+function pauseGame() { if (!running) return; paused = true; showMessage("Paused"); }
+function resumeGame() { if (!running) return; paused = false; lastTime = performance.now(); showMessage("Resumed", 900); }
+function stopGame() {
+  running = false; paused = false; enemies = []; particles = []; levelScore = 0; kills = 0;
+  level = Storage.loadLevel() || 1; levelStartAt = null;
+  updateUI(); showMessage("Game stopped");
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+}
+function restartGame() {
+  enemies = []; particles = []; levelScore = 0; kills = 0;
+  level = Storage.loadLevel() || 1; spawnInterval = 1200; running = false;
+  startGame();
+}
 
-/* ---- UI & messages ---- */
-function updateUI(){
+function updateUI() {
   ui.scoreBox.innerText = Math.floor(levelScore);
   ui.killsBox.innerText = kills;
   ui.levelBox.innerText = level;
@@ -207,22 +205,21 @@ function updateUI(){
   ui.highScoreBox.innerText = currentHighScore;
 }
 
-function showMessage(text, ms = 1400){
+function showMessage(text, ms = 1400) {
   ui.message.innerText = text;
   ui.message.style.display = "block";
   ui.message.style.opacity = 1;
-  setTimeout(()=> ui.message.style.opacity = 0, Math.max(600, ms - 200));
-  setTimeout(()=> ui.message.style.display = "none", ms);
+  setTimeout(() => ui.message.style.opacity = 0, Math.max(600, ms - 200));
+  setTimeout(() => ui.message.style.display = "none", ms);
 }
 
-function showHighPopup(text){
+function showHighPopup(text) {
   highPopupText.innerText = text;
   highPopup.style.display = "block";
-  setTimeout(()=> { highPopup.style.display = "none"; }, 2000);
+  setTimeout(() => { highPopup.style.display = "none"; }, 2000);
 }
 
-/* ---- PLAYER TAP / CLICK ---- */
-function onCanvasClick(e){
+function onCanvasClick(e) {
   if (!running || paused) return;
   totalShots++;
   const rect = canvas.getBoundingClientRect();
@@ -231,13 +228,13 @@ function onCanvasClick(e){
   const x = clientX - rect.left, y = clientY - rect.top;
 
   let hit = null;
-  for (let i = enemies.length - 1; i >= 0; i--){
+  for (let i = enemies.length - 1; i >= 0; i--) {
     const en = enemies[i]; const r = en.getRect();
-    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h){ hit = { enemy: en, index: i }; break; }
+    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) { hit = { enemy: en, index: i }; break; }
   }
 
-  if (hit){
-    const en = hit.enemy; enemies.splice(hit.index,1);
+  if (hit) {
+    const en = hit.enemy; enemies.splice(hit.index, 1);
     totalHits++;
     const base = scorePerType[en.type] || 10;
     const now = Date.now();
@@ -247,7 +244,7 @@ function onCanvasClick(e){
     const gained = Math.floor(base * comboMultiplier);
     levelScore += gained;
     kills++;
-    for (let p = 0; p < 18; p++){
+    for (let p = 0; p < 18; p++) {
       const color = (en.type === "gold") ? "#ffd66b" : "#222";
       particles.push(new Particle(en.x + (Math.random() - 0.5) * en.size, en.y + (Math.random() - 0.5) * en.size, color));
     }
@@ -258,10 +255,9 @@ function onCanvasClick(e){
 }
 
 canvas.addEventListener("click", onCanvasClick);
-canvas.addEventListener("touchstart", function(e){ e.preventDefault(); onCanvasClick(e); }, { passive:false });
+canvas.addEventListener("touchstart", function (e) { e.preventDefault(); onCanvasClick(e); }, { passive: false });
 
-/* ---- MAIN LOOP ---- */
-function loop(){
+function loop() {
   rafId = requestAnimationFrame(loop);
   const now = performance.now();
   const dt = Math.max(0.1, now - lastTime);
@@ -269,23 +265,22 @@ function loop(){
 
   if (!running) return;
   if (paused) {
-    ctx.globalAlpha = 0.5; ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.globalAlpha = 1;
-    ctx.fillStyle = "#fff"; ctx.font = "28px Inter"; ctx.fillText("PAUSED", canvas.width/2 - 60, canvas.height/2);
+    ctx.globalAlpha = 0.5; ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1;
+    ctx.fillStyle = "#fff"; ctx.font = "28px Inter"; ctx.fillText("PAUSED", canvas.width / 2 - 60, canvas.height / 2);
     return;
   }
 
-  // level timer
-  if (levelStartAt){
+  if (levelStartAt) {
     const elapsed = Date.now() - levelStartAt;
     const left = Math.max(0, LEVEL_DURATION - elapsed);
     const mm = Math.floor(left / 60000).toString().padStart(2, "0");
     const ss = Math.floor((left % 60000) / 1000).toString().padStart(2, "0");
     ui.timeLeft.innerText = `${mm}:${ss}`;
-    if (left <= 0){
+    if (left <= 0) {
       const nextLevel = level + 1;
       Storage.saveLevel(nextLevel);
       const storedHigh = Storage.loadHighScore() || 0;
-      if (levelScore > storedHigh){
+      if (levelScore > storedHigh) {
         Storage.saveHighScore(levelScore);
         currentHighScore = levelScore;
         showHighPopup("New High Score! " + levelScore);
@@ -294,52 +289,35 @@ function loop(){
       popupText.innerText = `Level ${level} completed!`;
       levelPopup.style.display = "block";
     }
-  } else {
-    ui.timeLeft.innerText = "00:00";
-  }
+  } else { ui.timeLeft.innerText = "00:00"; }
 
-  // clear
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // player update & draw
-  if (player) { 
-    updatePlayerWithJoystick(dt); // joystick movement
-    player.update(keys, dt); 
-    player.draw(ctx); 
-  }
+  if (player) { player.update(keys, dt); player.draw(ctx); }
 
-  // spawn
   spawnTimer += dt;
-  if (spawnTimer >= spawnInterval){
-    spawnTimer = 0;
-    spawnEnemyByLevel();
-  }
+  if (spawnTimer >= spawnInterval) { spawnTimer = 0; spawnEnemyByLevel(); }
 
-  // update enemies
-  for (let i = enemies.length - 1; i >= 0; i--){
+  for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
     e.update(dt, level);
     e.draw(ctx);
-
     const pRect = player.getRect();
     const r = e.getRect();
-    if (pRect.x < r.x + r.w && pRect.x + pRect.w > r.x && pRect.y < r.y + r.h && pRect.y + pRect.h > r.y){
+    if (pRect.x < r.x + r.w && pRect.x + pRect.w > r.x && pRect.y < r.y + r.h && pRect.y + pRect.h > r.y) {
       enemies.splice(i, 1);
       kills++;
       totalHits++;
       const gained = scorePerType[e.type] || 10;
       levelScore += gained;
-      for (let p = 0; p < 12; p++){
+      for (let p = 0; p < 12; p++) {
         const color = (e.type === "gold") ? "#ffd66b" : "#222";
         particles.push(new Particle(e.x + (Math.random() - 0.5) * e.size, e.y + (Math.random() - 0.5) * e.size, color));
       }
-    } else if (e.isOffScreen(canvas.width)) {
-      enemies.splice(i, 1);
-    }
+    } else if (e.isOffScreen(canvas.width)) { enemies.splice(i, 1); }
   }
 
-  // particles
-  for (let i = particles.length - 1; i >= 0; i--){
+  for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.update(dt);
     p.draw(ctx);
@@ -349,14 +327,12 @@ function loop(){
   updateUI();
 }
 
-// hook UI buttons
 document.getElementById("startBtn").onclick = () => { if (!running) startGame(); };
 document.getElementById("pauseBtn").onclick = pauseGame;
 document.getElementById("resumeBtn").onclick = resumeGame;
 document.getElementById("stopBtn").onclick = stopGame;
 document.getElementById("restartBtn").onclick = restartGame;
 
-// initial UI set
 window.onload = () => {
   currentHighScore = Storage.loadHighScore() || 0;
   ui.highScoreBox.innerText = currentHighScore;
