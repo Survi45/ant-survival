@@ -1,4 +1,4 @@
-// game.js - fully fixed per Surabhi's requirements
+// game.js - fixed for mobile joystick smoothness + start glitch
 
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
@@ -104,7 +104,8 @@ function startGame(){
   running = true;
   paused = false;
 
-  player = new Player(canvas); // spawn first to avoid start glitch
+  // spawn player immediately to fix start glitch
+  player = new Player(canvas);
   enemies = [];
   spawnTimer = 0;
   lastTime = performance.now();
@@ -193,7 +194,12 @@ let joystickActive=false, joyMove={x:0,y:0};
 const joyBase=document.getElementById("joystickBase");
 const joyStick=document.getElementById("joystickStick");
 
-function resetJoystick(){ joyStick.style.transform='translate(0px,0px)'; joyMove={x:0,y:0}; }
+function resetJoystick(){ 
+  joyMove={x:0,y:0};
+  joyStick.style.transition='transform 0.15s ease-out';
+  joyStick.style.transform='translate(0px,0px)';
+  setTimeout(()=> joyStick.style.transition='', 160);
+}
 
 function onJoyStart(e){
   e.preventDefault();
@@ -215,7 +221,10 @@ function onJoyMove(e){
   joyStick.style.transform=`translate(${joyMove.x*maxDist}px,${joyMove.y*maxDist}px)`;
 }
 
-function onJoyEnd(){ joystickActive=false; resetJoystick(); }
+function onJoyEnd(){ 
+  joystickActive=false; 
+  resetJoystick(); 
+}
 
 joyBase.addEventListener("mousedown", onJoyStart);
 joyBase.addEventListener("touchstart", onJoyStart,{passive:false});
@@ -286,7 +295,7 @@ function loop(){
     spawnEnemyByLevel();
   }
 
-  // enemy update & collision with player kills enemy
+  // enemy update & collision
   for(let i=enemies.length-1;i>=0;i--){
     const e=enemies[i];
     e.update(dt,level);
@@ -307,6 +316,7 @@ function loop(){
     }
   }
 
+  // particles
   for(let i=particles.length-1;i>=0;i--){
     const p=particles[i]; p.update(dt); p.draw(ctx);
     if(Date.now()-p.start>p.life) particles.splice(i,1);
