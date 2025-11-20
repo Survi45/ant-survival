@@ -12,16 +12,34 @@ class Player {
     this.imgLoaded = false;
     this.img.onload = () => { this.imgLoaded = true; };
     this.img.onerror = () => { this.imgLoaded = false; };
+
+    // joystick movement
+    this.moveX = 0; // -1 to 1
+    this.moveY = 0; // -1 to 1
   }
 
   update(keys, dt){
-    let moved = false;
-    if (keys["ArrowUp"] || keys["w"]){ this.y -= this.speed; moved = true; }
-    if (keys["ArrowDown"] || keys["s"]){ this.y += this.speed; moved = true; }
-    if (keys["ArrowLeft"] || keys["a"]){ this.x -= this.speed; this.facing = "left"; moved = true; }
-    if (keys["ArrowRight"] || keys["d"]){ this.x += this.speed; this.facing = "right"; moved = true; }
+    let dx = 0, dy = 0;
+    // keyboard input
+    if (keys["ArrowUp"] || keys["w"]) dy -= 1;
+    if (keys["ArrowDown"] || keys["s"]) dy += 1;
+    if (keys["ArrowLeft"] || keys["a"]) { dx -= 1; this.facing = "left"; }
+    if (keys["ArrowRight"] || keys["d"]) { dx += 1; this.facing = "right"; }
 
-    // clamp
+    // joystick input adds to keyboard
+    dx += this.moveX;
+    dy += this.moveY;
+
+    // normalize diagonal
+    if(dx!==0 && dy!==0){
+      dx *= 0.7071; dy *= 0.7071;
+    }
+
+    // apply speed
+    this.x += dx * this.speed;
+    this.y += dy * this.speed;
+
+    // clamp within canvas
     const half = this.size / 2;
     this.x = Math.max(half, Math.min(this.canvas.width - half, this.x));
     this.y = Math.max(half, Math.min(this.canvas.height - half, this.y));
@@ -41,7 +59,7 @@ class Player {
       return;
     }
 
-    // fallback procedural (respects facing)
+    // fallback procedural
     ctx.save(); ctx.imageSmoothingEnabled = false;
     const s = this.size, px = this.x, py = this.y, block = Math.round(s / 6);
     const map = [
