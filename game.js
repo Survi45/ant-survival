@@ -1,16 +1,16 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-// responsive canvas resize for mobile/tablet
-function resizeCanvas(){
-  const maxWidth = window.innerWidth*0.95;
-  const maxHeight = window.innerHeight*0.7;
-  const aspect = 800/500;
+// Responsive canvas display (keeps internal resolution 800x500)
+function resizeCanvas() {
+  const maxWidth = window.innerWidth * 0.95;
+  const maxHeight = window.innerHeight * 0.7;
+  const aspect = 800 / 500;
   let w = maxWidth;
-  let h = w/aspect;
-  if(h > maxHeight){ h = maxHeight; w = h*aspect; }
-  canvas.style.width = w+"px";
-  canvas.style.height = h+"px";
+  let h = w / aspect;
+  if (h > maxHeight) { h = maxHeight; w = h * aspect; }
+  canvas.style.width = w + "px";
+  canvas.style.height = h + "px";
 }
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
@@ -42,6 +42,7 @@ let levelStartAt = null;
 
 let currentHighScore = Storage.loadHighScore() || 0;
 
+// UI refs
 const ui = {
   scoreBox: document.getElementById("scoreBox"),
   killsBox: document.getElementById("killsBox"),
@@ -57,51 +58,64 @@ const popupText = document.getElementById("popupText");
 const highPopup = document.getElementById("highPopup");
 const highPopupText = document.getElementById("highPopupText");
 
-// joystick setup for mobile/tablet
-let joystick = { active:false, startX:0, startY:0, dx:0, dy:0 };
+// joystick setup (centered)
+let joystick = { active: false, startX: 0, startY: 0, dx: 0, dy: 0 };
 const joystickZone = document.getElementById("joystickZone");
 const joystickStick = document.getElementById("joystickStick");
 
-function updateJoystickMovement(){
-  if(player && joystick.active){
+// Only enable joystick on mobile/tablet
+const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+function updateJoystickMovement() {
+  if (player && joystick.active) {
     const maxDist = 50;
-    player.moveX = (joystick.dx/maxDist);
-    player.moveY = (joystick.dy/maxDist);
-  } else if(player){
+    player.moveX = joystick.dx / maxDist;
+    player.moveY = joystick.dy / maxDist;
+  } else if (player) {
     player.moveX = 0;
     player.moveY = 0;
   }
 }
 
-joystickZone.addEventListener("touchstart", function(e){
-  const t = e.touches[0];
-  joystick.active = true;
-  joystick.startX = t.clientX;
-  joystick.startY = t.clientY;
-  joystick.dx = 0; joystick.dy = 0;
-});
-joystickZone.addEventListener("touchmove", function(e){
-  if(!joystick.active) return;
-  const t = e.touches[0];
-  joystick.dx = t.clientX - joystick.startX;
-  joystick.dy = t.clientY - joystick.startY;
-  const maxDist = 50;
-  const dist = Math.sqrt(joystick.dx*joystick.dx+joystick.dy*joystick.dy);
-  if(dist>maxDist){
-    const scale = maxDist/dist;
-    joystick.dx*=scale;
-    joystick.dy*=scale;
-  }
-  joystickStick.style.transform = `translate(${joystick.dx}px, ${joystick.dy}px)`;
-  updateJoystickMovement();
-  e.preventDefault();
-},{passive:false});
-joystickZone.addEventListener("touchend", function(){
-  joystick.active = false;
-  joystick.dx=0; joystick.dy=0;
-  joystickStick.style.transform = `translate(0px,0px)`;
-  updateJoystickMovement();
-});
+if (isTouchDevice) {
+  joystickZone.style.display = "block";
+
+  joystickZone.addEventListener("touchstart", function (e) {
+    const t = e.touches[0];
+    joystick.active = true;
+    joystick.startX = t.clientX;
+    joystick.startY = t.clientY;
+    joystick.dx = 0; joystick.dy = 0;
+  });
+
+  joystickZone.addEventListener("touchmove", function (e) {
+    if (!joystick.active) return;
+    const t = e.touches[0];
+    joystick.dx = t.clientX - joystick.startX;
+    joystick.dy = t.clientY - joystick.startY;
+
+    const maxDist = 50;
+    const dist = Math.sqrt(joystick.dx * joystick.dx + joystick.dy * joystick.dy);
+    if (dist > maxDist) {
+      const scale = maxDist / dist;
+      joystick.dx *= scale;
+      joystick.dy *= scale;
+    }
+
+    joystickStick.style.transform = `translate(${joystick.dx}px, ${joystick.dy}px)`;
+    updateJoystickMovement();
+    e.preventDefault();
+  }, { passive: false });
+
+  joystickZone.addEventListener("touchend", function () {
+    joystick.active = false;
+    joystick.dx = 0; joystick.dy = 0;
+    joystickStick.style.transform = `translate(0px,0px)`;
+    updateJoystickMovement();
+  });
+} else {
+  joystickZone.style.display = "none"; // hide on desktop
+}
 
 // hook popup buttons
 document.getElementById("nextLevelBtn").onclick = () => {
@@ -136,9 +150,9 @@ const scorePerType = { normal: 12, gold: 75 };
 window.addEventListener("keydown", e => keys[e.key] = true);
 window.addEventListener("keyup", e => keys[e.key] = false);
 
-function randRange(a,b){ return a + Math.random() * (b - a); }
+function randRange(a, b) { return a + Math.random() * (b - a); }
 
-function spawnEnemyByLevel(){
+function spawnEnemyByLevel() {
   const baseSpeed = 0.6 + Math.random() * 1.0;
   const y = randRange(40, canvas.height - 40);
   const x = canvas.width + 20;
@@ -149,7 +163,7 @@ function spawnEnemyByLevel(){
   enemies.push(new Ant({ x, y, type: isGold ? "gold" : "normal", size, speed }));
 }
 
-function startGame(){
+function startGame() {
   if (running) return;
   const saved = Storage.loadLevel();
   level = saved ? saved : 1;
@@ -169,21 +183,21 @@ function startGame(){
   updateUI();
 }
 
-function pauseGame(){ if (!running) return; paused = true; showMessage("Paused"); }
-function resumeGame(){ if (!running) return; paused = false; lastTime = performance.now(); showMessage("Resumed", 900); }
-function stopGame(){ 
-  running = false; paused = false; enemies = []; particles = []; levelScore = 0; kills = 0; 
-  level = Storage.loadLevel() || 1; levelStartAt = null; 
-  updateUI(); showMessage("Game stopped"); 
-  if (rafId){ cancelAnimationFrame(rafId); rafId = null; } 
+function pauseGame() { if (!running) return; paused = true; showMessage("Paused"); }
+function resumeGame() { if (!running) return; paused = false; lastTime = performance.now(); showMessage("Resumed", 900); }
+function stopGame() {
+  running = false; paused = false; enemies = []; particles = []; levelScore = 0; kills = 0;
+  level = Storage.loadLevel() || 1; levelStartAt = null;
+  updateUI(); showMessage("Game stopped");
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
 }
-function restartGame(){ 
-  enemies = []; particles = []; levelScore = 0; kills = 0; 
-  level = Storage.loadLevel() || 1; spawnInterval = 1200; running = false; 
-  startGame(); 
+function restartGame() {
+  enemies = []; particles = []; levelScore = 0; kills = 0;
+  level = Storage.loadLevel() || 1; spawnInterval = 1200; running = false;
+  startGame();
 }
 
-function updateUI(){
+function updateUI() {
   ui.scoreBox.innerText = Math.floor(levelScore);
   ui.killsBox.innerText = kills;
   ui.levelBox.innerText = level;
@@ -191,21 +205,21 @@ function updateUI(){
   ui.highScoreBox.innerText = currentHighScore;
 }
 
-function showMessage(text, ms = 1400){
+function showMessage(text, ms = 1400) {
   ui.message.innerText = text;
   ui.message.style.display = "block";
   ui.message.style.opacity = 1;
-  setTimeout(()=> ui.message.style.opacity = 0, Math.max(600, ms - 200));
-  setTimeout(()=> ui.message.style.display = "none", ms);
+  setTimeout(() => ui.message.style.opacity = 0, Math.max(600, ms - 200));
+  setTimeout(() => ui.message.style.display = "none", ms);
 }
 
-function showHighPopup(text){
+function showHighPopup(text) {
   highPopupText.innerText = text;
   highPopup.style.display = "block";
-  setTimeout(()=> { highPopup.style.display = "none"; }, 2000);
+  setTimeout(() => { highPopup.style.display = "none"; }, 2000);
 }
 
-function onCanvasClick(e){
+function onCanvasClick(e) {
   if (!running || paused) return;
   totalShots++;
   const rect = canvas.getBoundingClientRect();
@@ -214,13 +228,13 @@ function onCanvasClick(e){
   const x = clientX - rect.left, y = clientY - rect.top;
 
   let hit = null;
-  for (let i = enemies.length - 1; i >= 0; i--){
+  for (let i = enemies.length - 1; i >= 0; i--) {
     const en = enemies[i]; const r = en.getRect();
-    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h){ hit = { enemy: en, index: i }; break; }
+    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) { hit = { enemy: en, index: i }; break; }
   }
 
-  if (hit){
-    const en = hit.enemy; enemies.splice(hit.index,1);
+  if (hit) {
+    const en = hit.enemy; enemies.splice(hit.index, 1);
     totalHits++;
     const base = scorePerType[en.type] || 10;
     const now = Date.now();
@@ -230,7 +244,7 @@ function onCanvasClick(e){
     const gained = Math.floor(base * comboMultiplier);
     levelScore += gained;
     kills++;
-    for (let p = 0; p < 18; p++){
+    for (let p = 0; p < 18; p++) {
       const color = (en.type === "gold") ? "#ffd66b" : "#222";
       particles.push(new Particle(en.x + (Math.random() - 0.5) * en.size, en.y + (Math.random() - 0.5) * en.size, color));
     }
@@ -241,9 +255,9 @@ function onCanvasClick(e){
 }
 
 canvas.addEventListener("click", onCanvasClick);
-canvas.addEventListener("touchstart", function(e){ e.preventDefault(); onCanvasClick(e); }, { passive:false });
+canvas.addEventListener("touchstart", function (e) { e.preventDefault(); onCanvasClick(e); }, { passive: false });
 
-function loop(){
+function loop() {
   rafId = requestAnimationFrame(loop);
   const now = performance.now();
   const dt = Math.max(0.1, now - lastTime);
@@ -251,22 +265,22 @@ function loop(){
 
   if (!running) return;
   if (paused) {
-    ctx.globalAlpha = 0.5; ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.globalAlpha = 1;
-    ctx.fillStyle = "#fff"; ctx.font = "28px Inter"; ctx.fillText("PAUSED", canvas.width/2 - 60, canvas.height/2);
+    ctx.globalAlpha = 0.5; ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1;
+    ctx.fillStyle = "#fff"; ctx.font = "28px Inter"; ctx.fillText("PAUSED", canvas.width / 2 - 60, canvas.height / 2);
     return;
   }
 
-  if (levelStartAt){
+  if (levelStartAt) {
     const elapsed = Date.now() - levelStartAt;
     const left = Math.max(0, LEVEL_DURATION - elapsed);
     const mm = Math.floor(left / 60000).toString().padStart(2, "0");
     const ss = Math.floor((left % 60000) / 1000).toString().padStart(2, "0");
     ui.timeLeft.innerText = `${mm}:${ss}`;
-    if (left <= 0){
+    if (left <= 0) {
       const nextLevel = level + 1;
       Storage.saveLevel(nextLevel);
       const storedHigh = Storage.loadHighScore() || 0;
-      if (levelScore > storedHigh){
+      if (levelScore > storedHigh) {
         Storage.saveHighScore(levelScore);
         currentHighScore = levelScore;
         showHighPopup("New High Score! " + levelScore);
@@ -277,33 +291,33 @@ function loop(){
     }
   } else { ui.timeLeft.innerText = "00:00"; }
 
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   if (player) { player.update(keys, dt); player.draw(ctx); }
 
   spawnTimer += dt;
-  if (spawnTimer >= spawnInterval){ spawnTimer = 0; spawnEnemyByLevel(); }
+  if (spawnTimer >= spawnInterval) { spawnTimer = 0; spawnEnemyByLevel(); }
 
-  for (let i = enemies.length - 1; i >= 0; i--){
+  for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
     e.update(dt, level);
     e.draw(ctx);
     const pRect = player.getRect();
     const r = e.getRect();
-    if (pRect.x < r.x + r.w && pRect.x + pRect.w > r.x && pRect.y < r.y + r.h && pRect.y + pRect.h > r.y){
+    if (pRect.x < r.x + r.w && pRect.x + pRect.w > r.x && pRect.y < r.y + r.h && pRect.y + pRect.h > r.y) {
       enemies.splice(i, 1);
       kills++;
       totalHits++;
       const gained = scorePerType[e.type] || 10;
       levelScore += gained;
-      for (let p = 0; p < 12; p++){
+      for (let p = 0; p < 12; p++) {
         const color = (e.type === "gold") ? "#ffd66b" : "#222";
         particles.push(new Particle(e.x + (Math.random() - 0.5) * e.size, e.y + (Math.random() - 0.5) * e.size, color));
       }
     } else if (e.isOffScreen(canvas.width)) { enemies.splice(i, 1); }
   }
 
-  for (let i = particles.length - 1; i >= 0; i--){
+  for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.update(dt);
     p.draw(ctx);
