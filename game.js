@@ -1,4 +1,4 @@
-// game.js — FULL final version 
+// game.js — FULL final version (joystick size increased + robust joystick behavior)
 
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
@@ -218,7 +218,6 @@ let joystick = { active:false, startX:0, startY:0, dx:0, dy:0, normalizedX:0, no
 
 // utility: set stick transform
 function setStickTransform(x, y, instant=false){
-  // instant: no transition (while dragging). When releasing, call with instant=false to use CSS transition
   joystickStick.style.transition = instant ? "none" : "120ms cubic-bezier(.2,.8,.2,1)";
   joystickStick.style.transform = `translate(${x}px, ${y}px)`;
 }
@@ -236,7 +235,6 @@ function computeJoystickFromPos(clientX, clientY){
   const centerY = rect.top + rect.height/2;
   let dx = clientX - centerX;
   let dy = clientY - centerY;
-  // invert Y if needed (we'll keep natural coordinates where -Y is up)
   const dist = Math.sqrt(dx*dx + dy*dy);
   const maxRadius = rect.width/2;
   if (dist > maxRadius){
@@ -253,10 +251,8 @@ function computeJoystickFromPos(clientX, clientY){
 // handlers
 function handleJoystickStart(e){
   joystick.active = true;
-  // stop transition while dragging for snappy follow
   setStickTransform(joystick.dx, joystick.dy, true);
   if (e.touches){
-    // use first touch for joystick
     computeJoystickFromPos(e.touches[0].clientX, e.touches[0].clientY);
     e.preventDefault();
   } else {
@@ -275,7 +271,6 @@ function handleJoystickMove(e){
 }
 
 function handleJoystickEnd(){
-  // release: smooth center
   joystick.active = false;
   resetStickToCenter();
 }
@@ -284,7 +279,18 @@ function handleJoystickEnd(){
 function ensureJoystickVisibility(){
   try{
     const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-    if (isTouch) joystickZone.style.display = "block";
+    if (isTouch) {
+      // increase joystick size safely at runtime without breaking behavior
+      joystickZone.style.display = "block";
+      // make joystick slightly larger but keep consistent base/stick proportions
+      // (these inline sizes override CSS only on touch devices)
+      joystickZone.style.width = "140px";
+      joystickZone.style.height = "140px";
+      joystickBase.style.width = "100%";
+      joystickBase.style.height = "100%";
+      joystickStick.style.width = "60%";
+      joystickStick.style.height = "60%";
+    }
   }catch(e){}
 }
 
@@ -295,7 +301,6 @@ joystickBase.addEventListener("touchend", handleJoystickEnd, { passive:false });
 joystickBase.addEventListener("touchcancel", handleJoystickEnd, { passive:false });
 
 joystickBase.addEventListener("mousedown", function(e){
-  // only react to left button
   if (e.button !== 0) return;
   handleJoystickStart(e);
 });
@@ -320,26 +325,21 @@ function updateJoystickMovement(dt){
   const normX = joystick.normalizedX || 0;
   const normY = joystick.normalizedY || 0;
 
-  // if joystick is almost zero and not active, nothing to do
   if (!joystick.active && Math.abs(normX) < 0.001 && Math.abs(normY) < 0.001) return;
 
-  // speed scaling
   const baselineFrameMs = 16.6667; // 60fps baseline
   const frameFactor = dt / baselineFrameMs;
 
-  // apply movement
   const moveX = normX * player.speed * frameFactor;
   const moveY = normY * player.speed * frameFactor;
 
   player.x += moveX;
   player.y += moveY;
 
-  // clamp inside canvas
   const half = player.size / 2;
   player.x = Math.max(half, Math.min(canvas.width - half, player.x));
   player.y = Math.max(half, Math.min(canvas.height - half, player.y));
 
-  // set facing based on horizontal input (for nice direction)
   if (Math.abs(normX) > 0.1){
     player.facing = (normX < 0) ? "left" : "right";
   }
@@ -362,7 +362,6 @@ function loop(){
   }
 
   if (paused){
-    // draw paused overlay but keep normal alpha for sprites (we don't modify globalAlpha permanently)
     ctx.save();
     ctx.globalAlpha = 0.5;
     ctx.fillStyle = "rgba(0,0,0,0.35)";
@@ -377,13 +376,8 @@ function loop(){
 
   // update player: joystick + keyboard
   if (player){
-    // joystick movement first (touch)
     updateJoystickMovement(dt);
-
-    // keyboard movement (desktop). Player.update expects dt as param in some implementations — we pass dt to be safe
     if (typeof player.update === "function") player.update(keys, dt);
-
-    // ensure player.draw respects drawing alpha and image smoothing (Player.draw handles fallback)
     if (typeof player.draw === "function") player.draw(ctx);
   }
 
@@ -480,7 +474,7 @@ window.onload = () => {
   // IMPORTANT: Do NOT create player here (so the canvas shows only watermark/logo on load).
   // Player will be created at startGame() so there's no blurry placeholder at page load.
 
-  // show joystick on touch devices
+  // show joystick on touch devices and increase its size safely
   ensureJoystickVisibility();
 
   // safety: ensure joystick resets when user lifts finger anywhere
