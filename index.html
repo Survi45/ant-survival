@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Ant Survival</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <img id="logoImg" src="images/logo.png" alt="logo" />
+    <h1>Ant Survival</h1>
+  </header>
+
+  <main>
+    <div class="canvasWrap">
+      <!-- watermark centered behind the canvas, uses existing image "images/player.png" -->
+      <div id="watermark" aria-hidden="true"></div>
+      <canvas id="gameCanvas" width="800" height="500"></canvas>
+    </div>
+
+    <div id="ui">
+      <div>Level score: <span id="scoreBox">0</span></div>
+      <div>Kills: <span id="killsBox">0</span></div>
+      <div>Level: <span id="levelBox">1</span></div>
+      <div>Combo: <span id="comboBox">x1</span></div>
+      <div>Time Left: <span id="timeLeft">00:00</span></div>
+      <div>High Score: <span id="highScoreBox">0</span></div>
+    </div>
+
+    <div class="controls">
+      <button id="startBtn">Start</button>
+      <button id="pauseBtn">Pause</button>
+      <button id="resumeBtn">Resume</button>
+      <button id="stopBtn">Stop</button>
+      <button id="restartBtn">Restart</button>
+    </div>
+
+    <div id="message" class="message"></div>
+  </main>
+
+  <!-- Level complete popup -->
+  <div id="levelPopup" class="popup" style="display:none;">
+    <h2 id="popupText">Level Complete!</h2>
+    <div class="popupButtons">
+      <button id="nextLevelBtn">Next Level</button>
+      <button id="backBtn">Back</button>
+    </div>
+  </div>
+
+  <!-- New highscore popup (auto vanish) -->
+  <div id="highPopup" class="popup small" style="display:none;">
+    <h3 id="highPopupText">New High Score!</h3>
+  </div>
+
+  <!-- Scripts -->
+  <script src="storage.js"></script>
+  <script src="enemy.js"></script>
+  <script src="player.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
