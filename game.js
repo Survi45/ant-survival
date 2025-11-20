@@ -1,4 +1,6 @@
-// game.js — FULL final version (joystick size increased + robust joystick behavior)
+// game.js — FULL final version (mobile-only larger joystick, smooth movement)
+// --- Integrates with your existing player.js, enemy.js, storage.js, etc. ---
+// Replace your current game.js with this full content (copy-paste).
 
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
@@ -207,141 +209,167 @@ function onCanvasClick(e){
 canvas.addEventListener("click", onCanvasClick);
 canvas.addEventListener("touchstart", function(e){ e.preventDefault(); onCanvasClick(e); }, { passive:false });
 
-/* ---------- JOYSTICK HANDLER (improved) ---------- */
-// HTML elements
+/* ---------- JOYSTICK HANDLER (mobile-only, larger, stable) ---------- */
+/*
+ Goals:
+  - Joystick visible only on mobile/tablet (hidden on desktop)
+  - Bigger size (configurable here)
+  - Stick snaps back to center smoothly on release
+  - Movement vector normalized (-1..1)
+  - Movement applied smoothly in loop scaled by dt
+*/
+
+// Elements (must match your HTML)
 const joystickZone = document.getElementById("joystickZone");
 const joystickBase = document.getElementById("joystickBase");
 const joystickStick = document.getElementById("joystickStick");
 
-// joystick state
-let joystick = { active:false, startX:0, startY:0, dx:0, dy:0, normalizedX:0, normalizedY:0 };
+// Joystick configuration
+const JOY_BASE_DIAMETER = 140; // px — larger base (you asked for bigger). Adjust if needed.
+const JOY_STICK_DIAMETER = 70; // px inner knob
+let JOY_MAX_RADIUS = Math.round(JOY_BASE_DIAMETER / 2) - 6; // px
 
-// utility: set stick transform
-function setStickTransform(x, y, instant=false){
-  joystickStick.style.transition = instant ? "none" : "120ms cubic-bezier(.2,.8,.2,1)";
-  joystickStick.style.transform = `translate(${x}px, ${y}px)`;
+// State
+let joystickActive = false;
+let joyNormX = 0; // -1..1
+let joyNormY = 0; // -1..1
+
+// Utility: detect touch devices (mobile/tablet)
+function isTouchDevice() {
+  try {
+    return (('ontouchstart' in window) || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0);
+  } catch (e) { return false; }
 }
 
-// reset stick to center with smooth animation
-function resetStickToCenter(){
-  joystick.dx = 0; joystick.dy = 0; joystick.normalizedX = 0; joystick.normalizedY = 0;
-  setStickTransform(0, 0, false);
+// Ensure joystick DOM sizing and visibility (we only modify inline styles so CSS stays same)
+function configureJoystickDisplay() {
+  // Show only for touch devices
+  if (isTouchDevice()) {
+    joystickZone.style.display = "flex";
+    // ensure base/stick sizes are set to our desired values
+    joystickZone.style.width = JOY_BASE_DIAMETER + "px";
+    joystickZone.style.height = JOY_BASE_DIAMETER + "px";
+    joystickBase.style.width = JOY_BASE_DIAMETER + "px";
+    joystickBase.style.height = JOY_BASE_DIAMETER + "px";
+    joystickStick.style.width = JOY_STICK_DIAMETER + "px";
+    joystickStick.style.height = JOY_STICK_DIAMETER + "px";
+    joystickStick.style.left = "50%";
+    joystickStick.style.top = "50%";
+    joystickStick.style.transform = "translate(-50%, -50%)";
+    JOY_MAX_RADIUS = Math.round(JOY_BASE_DIAMETER / 2) - 6;
+  } else {
+    // hide on desktop/laptop
+    joystickZone.style.display = "none";
+  }
 }
 
-// compute joystick values from event coordinates
-function computeJoystickFromPos(clientX, clientY){
+// Set stick transform with optional instant mode (no CSS transition)
+function joystickSetTransform(x, y, instant) {
+  if (instant) {
+    joystickStick.style.transition = "none";
+  } else {
+    joystickStick.style.transition = "120ms cubic-bezier(.2,.8,.2,1)";
+  }
+  // Use translate to move relative to center
+  joystickStick.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+}
+
+// Reset to center smoothly
+function joystickResetToCenter() {
+  joystickActive = false;
+  joyNormX = 0; joyNormY = 0;
+  joystickSetTransform(0, 0, false);
+}
+
+// Compute normalized vector from client coords
+function joystickComputeFromClient(clientX, clientY) {
   const rect = joystickBase.getBoundingClientRect();
-  const centerX = rect.left + rect.width/2;
-  const centerY = rect.top + rect.height/2;
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
   let dx = clientX - centerX;
   let dy = clientY - centerY;
+  // clamp to max radius
   const dist = Math.sqrt(dx*dx + dy*dy);
-  const maxRadius = rect.width/2;
-  if (dist > maxRadius){
-    dx = dx / dist * maxRadius;
-    dy = dy / dist * maxRadius;
+  const maxR = JOY_MAX_RADIUS;
+  if (dist > maxR) {
+    dx = (dx / dist) * maxR;
+    dy = (dy / dist) * maxR;
   }
-  joystick.dx = dx;
-  joystick.dy = dy;
-  joystick.normalizedX = dx / maxRadius;
-  joystick.normalizedY = dy / maxRadius;
-  setStickTransform(dx, dy, true); // instant while dragging
+  // set transform instantly for finger-move responsiveness
+  joystickSetTransform(dx, dy, true);
+  // normalized values -X = left, -Y = up
+  joyNormX = dx / maxR;
+  joyNormY = dy / maxR;
 }
 
-// handlers
-function handleJoystickStart(e){
-  joystick.active = true;
-  setStickTransform(joystick.dx, joystick.dy, true);
-  if (e.touches){
-    computeJoystickFromPos(e.touches[0].clientX, e.touches[0].clientY);
+// Touch / Mouse handlers for joystick
+function handleJoyStart(e) {
+  joystickActive = true;
+  joystickStick.style.transition = "none";
+  if (e.touches) {
+    joystickComputeFromClient(e.touches[0].clientX, e.touches[0].clientY);
     e.preventDefault();
   } else {
-    computeJoystickFromPos(e.clientX, e.clientY);
+    joystickComputeFromClient(e.clientX, e.clientY);
   }
 }
-
-function handleJoystickMove(e){
-  if (!joystick.active) return;
-  if (e.touches){
-    computeJoystickFromPos(e.touches[0].clientX, e.touches[0].clientY);
+function handleJoyMove(e) {
+  if (!joystickActive) return;
+  if (e.touches) {
+    joystickComputeFromClient(e.touches[0].clientX, e.touches[0].clientY);
     e.preventDefault();
   } else {
-    computeJoystickFromPos(e.clientX, e.clientY);
+    joystickComputeFromClient(e.clientX, e.clientY);
   }
 }
-
-function handleJoystickEnd(){
-  joystick.active = false;
-  resetStickToCenter();
+function handleJoyEnd(e) {
+  // smooth snap back
+  joystickActive = false;
+  joystickResetToCenter();
 }
 
-// show joystick only on touch devices, but also allow CSS media query to show for testing
-function ensureJoystickVisibility(){
-  try{
-    const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-    if (isTouch) {
-      // increase joystick size safely at runtime without breaking behavior
-      joystickZone.style.display = "block";
-      // make joystick slightly larger but keep consistent base/stick proportions
-      // (these inline sizes override CSS only on touch devices)
-      joystickZone.style.width = "140px";
-      joystickZone.style.height = "140px";
-      joystickBase.style.width = "100%";
-      joystickBase.style.height = "100%";
-      joystickStick.style.width = "60%";
-      joystickStick.style.height = "60%";
-    }
-  }catch(e){}
-}
-
-// wire events: touch and mouse
-joystickBase.addEventListener("touchstart", handleJoystickStart, { passive:false });
-joystickBase.addEventListener("touchmove", handleJoystickMove, { passive:false });
-joystickBase.addEventListener("touchend", handleJoystickEnd, { passive:false });
-joystickBase.addEventListener("touchcancel", handleJoystickEnd, { passive:false });
-
+// Add listeners (touch first)
+joystickBase.addEventListener("touchstart", handleJoyStart, { passive: false });
+joystickBase.addEventListener("touchmove", handleJoyMove, { passive: false });
+joystickBase.addEventListener("touchend", handleJoyEnd, { passive: false });
+joystickBase.addEventListener("touchcancel", handleJoyEnd, { passive: false });
+// Mouse support for testing on devices that show joystick (optional)
 joystickBase.addEventListener("mousedown", function(e){
   if (e.button !== 0) return;
-  handleJoystickStart(e);
+  handleJoyStart(e);
 });
-document.addEventListener("mousemove", function(e){
-  if (joystick.active) handleJoystickMove(e);
-});
-document.addEventListener("mouseup", function(e){
-  if (joystick.active) handleJoystickEnd();
-});
-document.addEventListener("touchend", handleJoystickEnd);
-document.addEventListener("touchcancel", handleJoystickEnd);
+document.addEventListener("mousemove", function(e){ if (joystickActive) handleJoyMove(e); });
+document.addEventListener("mouseup", function(){ if (joystickActive) handleJoyEnd(); });
+
+// Provide vector to update loop
+function getJoystickNormalized() {
+  return { x: joyNormX, y: joyNormY };
+}
 
 /* ---------- JOYSTICK -> PLAYER MOVEMENT (smooth) ---------- */
-/*
-  Movement approach:
-  - We convert joystick.normalizedX/Y (-1..1) to movement vector.
-  - Multiply by player.speed and scale by dt so movement is framerate independent.
-  - Factor uses 60fps baseline: multiplier = dt / 16.67 (approx 16.67 ms per frame).
-*/
-function updateJoystickMovement(dt){
-  if(!player) return;
-  const normX = joystick.normalizedX || 0;
-  const normY = joystick.normalizedY || 0;
+function updateJoystickMovement(dt) {
+  if (!player) return;
+  const v = getJoystickNormalized();
+  // If tiny input and not active, skip
+  if (!joystickActive && Math.abs(v.x) < 0.001 && Math.abs(v.y) < 0.001) return;
 
-  if (!joystick.active && Math.abs(normX) < 0.001 && Math.abs(normY) < 0.001) return;
+  // Frame factor so movement feels consistent across frame rates
+  const baselineMs = 16.6667;
+  const factor = dt / baselineMs;
 
-  const baselineFrameMs = 16.6667; // 60fps baseline
-  const frameFactor = dt / baselineFrameMs;
-
-  const moveX = normX * player.speed * frameFactor;
-  const moveY = normY * player.speed * frameFactor;
+  const moveX = v.x * player.speed * factor;
+  const moveY = v.y * player.speed * factor;
 
   player.x += moveX;
   player.y += moveY;
 
+  // clamp
   const half = player.size / 2;
   player.x = Math.max(half, Math.min(canvas.width - half, player.x));
   player.y = Math.max(half, Math.min(canvas.height - half, player.y));
 
-  if (Math.abs(normX) > 0.1){
-    player.facing = (normX < 0) ? "left" : "right";
+  if (Math.abs(v.x) > 0.1) {
+    player.facing = (v.x < 0) ? "left" : "right";
   }
 }
 
@@ -352,12 +380,12 @@ function loop(){
   const dt = Math.max(0.1, now - lastTime);
   lastTime = now;
 
-  // clear every frame and draw
+  // clear every frame
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // If not running (before start): show nothing but logo (watermark is CSS background) => do nothing
+  // If not running (before start): show only watermark via CSS, no canvas draws
   if (!running){
-    // Keep UI (score/time) not changed; do not instantiate/draw player/enemies.
+    // no canvas drawing pre-start (user requested logo only)
     return;
   }
 
@@ -376,8 +404,13 @@ function loop(){
 
   // update player: joystick + keyboard
   if (player){
+    // joystick movement with dt
     updateJoystickMovement(dt);
+
+    // keyboard movement (desktop)
     if (typeof player.update === "function") player.update(keys, dt);
+
+    // draw player
     if (typeof player.draw === "function") player.draw(ctx);
   }
 
@@ -474,12 +507,12 @@ window.onload = () => {
   // IMPORTANT: Do NOT create player here (so the canvas shows only watermark/logo on load).
   // Player will be created at startGame() so there's no blurry placeholder at page load.
 
-  // show joystick on touch devices and increase its size safely
-  ensureJoystickVisibility();
+  // Configure joystick display & sizing for mobile (hide on desktop)
+  configureJoystickDisplay();
 
   // safety: ensure joystick resets when user lifts finger anywhere
-  document.addEventListener("touchend", handleJoystickEnd);
-  document.addEventListener("touchcancel", handleJoystickEnd);
+  document.addEventListener("touchend", handleJoyEnd);
+  document.addEventListener("touchcancel", handleJoyEnd);
 
   // start the render loop so UI message timing works (we still early-return when !running)
   loop();
