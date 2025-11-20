@@ -1,5 +1,3 @@
-// game.js - final integrated logic per Surabhi's spec (updated golden spawn rate + fixed joystick)
-
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
@@ -46,9 +44,9 @@ const popupText = document.getElementById("popupText");
 const highPopup = document.getElementById("highPopup");
 const highPopupText = document.getElementById("highPopupText");
 
-// popup buttons
+// hook popup buttons
 document.getElementById("nextLevelBtn").onclick = () => {
-  level++;
+  level = level + 1;
   Storage.saveLevel(level);
   levelScore = 0;
   spawnInterval = Math.max(420, spawnInterval * 0.85);
@@ -84,19 +82,81 @@ window.addEventListener("keyup", e => keys[e.key] = false);
 // helpers
 function randRange(a,b){ return a + Math.random() * (b - a); }
 
-/* spawn logic */
+/* ---- UPDATED spawn logic: level-based golden spawn chance, gold size & speed tweak ---- */
 function spawnEnemyByLevel(){
   const baseSpeed = 0.6 + Math.random() * 1.0;
   const y = randRange(40, canvas.height - 40);
   const x = canvas.width + 20;
+
   const goldChance = Math.min(0.05 + (level * 0.03), 0.40);
   const isGold = Math.random() < goldChance;
+
   const size = isGold ? 34 : 22 + Math.min(20, level * 2);
   const speed = baseSpeed * (isGold ? 1.2 : 1);
+
   enemies.push(new Ant({ x, y, type: isGold ? "gold" : "normal", size, speed }));
 }
 
-/* start / pause / resume / stop / restart */
+/* ---- JOYSTICK SETUP ---- */
+const joystick = {
+  zone: document.getElementById("joystickZone"),
+  base: document.getElementById("joystickBase"),
+  stick: document.getElementById("joystickStick"),
+  active: false,
+  deltaX: 0,
+  deltaY: 0,
+  maxDistance: 40
+};
+
+joystick.zone.addEventListener("touchstart", (e)=>{
+  e.preventDefault();
+  joystick.active = true;
+}, { passive:false });
+
+joystick.zone.addEventListener("touchmove", (e)=>{
+  if (!joystick.active) return;
+  const rect = joystick.base.getBoundingClientRect();
+  const touch = e.touches[0];
+  let dx = touch.clientX - (rect.left + rect.width/2);
+  let dy = touch.clientY - (rect.top + rect.height/2);
+
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if (dist > joystick.maxDistance){
+    dx = dx / dist * joystick.maxDistance;
+    dy = dy / dist * joystick.maxDistance;
+  }
+
+  joystick.deltaX = dx;
+  joystick.deltaY = dy;
+
+  joystick.stick.style.transform = `translate(${dx}px, ${dy}px)`;
+}, { passive:false });
+
+joystick.zone.addEventListener("touchend", ()=>{
+  joystick.active = false;
+  joystick.deltaX = 0;
+  joystick.deltaY = 0;
+  joystick.stick.style.transform = `translate(0px,0px)`; // return center
+});
+
+function updatePlayerWithJoystick(dt){
+  if (!player || !joystick.active) return;
+
+  const moveX = joystick.deltaX / joystick.maxDistance * player.speed;
+  const moveY = joystick.deltaY / joystick.maxDistance * player.speed;
+
+  player.x += moveX;
+  player.y += moveY;
+
+  const half = player.size / 2;
+  player.x = Math.max(half, Math.min(canvas.width - half, player.x));
+  player.y = Math.max(half, Math.min(canvas.height - half, player.y));
+
+  if (moveX < 0) player.facing = "left";
+  else if (moveX > 0) player.facing = "right";
+}
+
+/* ---- START / PAUSE / RESUME / STOP / RESTART ---- */
 function startGame(){
   if (running) return;
   const saved = Storage.loadLevel();
@@ -104,7 +164,12 @@ function startGame(){
 
   running = true;
   paused = false;
+
+  // ensure canvas is ready before player init
   player = new Player(canvas);
+  player.x = canvas.width * 0.12;
+  player.y = canvas.height * 0.5;
+
   spawnTimer = 0;
   lastTime = performance.now();
 
@@ -119,6 +184,13 @@ function startGame(){
   if (!rafId) loop();
   showMessage("Game started — Good luck!");
   updateUI();
+
+  // show joystick only on mobile/tablet
+  if (/Mobi|Android|iPad|iPhone/i.test(navigator.userAgent)) {
+    joystick.zone.style.display = "block";
+  } else {
+    joystick.zone.style.display = "none";
+  }
 }
 
 function pauseGame(){ if (!running) return; paused = true; showMessage("Paused"); }
@@ -126,7 +198,7 @@ function resumeGame(){ if (!running) return; paused = false; lastTime = performa
 function stopGame(){ running = false; paused = false; enemies = []; particles = []; levelScore = 0; kills = 0; level = Storage.loadLevel() || 1; levelStartAt = null; updateUI(); showMessage("Game stopped"); if (rafId){ cancelAnimationFrame(rafId); rafId = null; } }
 function restartGame(){ enemies = []; particles = []; levelScore = 0; kills = 0; level = Storage.loadLevel() || 1; spawnInterval = 1200; running = false; startGame(); }
 
-// UI updates
+/* ---- UI & messages ---- */
 function updateUI(){
   ui.scoreBox.innerText = Math.floor(levelScore);
   ui.killsBox.innerText = kills;
@@ -135,7 +207,6 @@ function updateUI(){
   ui.highScoreBox.innerText = currentHighScore;
 }
 
-// messages
 function showMessage(text, ms = 1400){
   ui.message.innerText = text;
   ui.message.style.display = "block";
@@ -144,14 +215,13 @@ function showMessage(text, ms = 1400){
   setTimeout(()=> ui.message.style.display = "none", ms);
 }
 
-// high score popup
 function showHighPopup(text){
   highPopupText.innerText = text;
   highPopup.style.display = "block";
   setTimeout(()=> { highPopup.style.display = "none"; }, 2000);
 }
 
-// click/touch kill handler
+/* ---- PLAYER TAP / CLICK ---- */
 function onCanvasClick(e){
   if (!running || paused) return;
   totalShots++;
@@ -190,44 +260,7 @@ function onCanvasClick(e){
 canvas.addEventListener("click", onCanvasClick);
 canvas.addEventListener("touchstart", function(e){ e.preventDefault(); onCanvasClick(e); }, { passive:false });
 
-// ------------------ JOYSTICK ------------------
-const joyBase = document.getElementById("joystickBase");
-const joyStick = document.getElementById("joystickStick");
-let joyActive = false;
-let joyPos = { x:0, y:0 };
-let joyTarget = { x:0, y:0 };
-
-function joyStart(e){ e.preventDefault(); joyActive = true; }
-function joyMove(e){
-  if(!joyActive) return;
-  const rect = joyBase.getBoundingClientRect();
-  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-  let dx = clientX - (rect.left + rect.width/2);
-  let dy = clientY - (rect.top + rect.height/2);
-  const maxDist = rect.width/2;
-  const dist = Math.min(maxDist, Math.hypot(dx, dy));
-  const angle = Math.atan2(dy, dx);
-  joyTarget.x = Math.cos(angle) * dist;
-  joyTarget.y = Math.sin(angle) * dist;
-}
-
-function joyEnd(){ joyActive = false; joyTarget.x = 0; joyTarget.y = 0; }
-
-joyBase.addEventListener("mousedown", joyStart);
-joyBase.addEventListener("touchstart", joyStart, {passive:false});
-window.addEventListener("mousemove", joyMove);
-window.addEventListener("touchmove", joyMove, {passive:false});
-window.addEventListener("mouseup", joyEnd);
-window.addEventListener("touchend", joyEnd);
-
-function updateJoystick(dt){
-  joyPos.x += (joyTarget.x - joyPos.x) * Math.min(dt/50, 1);
-  joyPos.y += (joyTarget.y - joyPos.y) * Math.min(dt/50, 1);
-  joyStick.style.transform = `translate(${joyPos.x}px, ${joyPos.y}px)`;
-}
-
-// ---------------- MAIN LOOP ------------------
+/* ---- MAIN LOOP ---- */
 function loop(){
   rafId = requestAnimationFrame(loop);
   const now = performance.now();
@@ -241,17 +274,18 @@ function loop(){
     return;
   }
 
-  if(levelStartAt){
+  // level timer
+  if (levelStartAt){
     const elapsed = Date.now() - levelStartAt;
     const left = Math.max(0, LEVEL_DURATION - elapsed);
     const mm = Math.floor(left / 60000).toString().padStart(2, "0");
     const ss = Math.floor((left % 60000) / 1000).toString().padStart(2, "0");
     ui.timeLeft.innerText = `${mm}:${ss}`;
-    if(left <= 0){
-      const nextLevel = level+1;
+    if (left <= 0){
+      const nextLevel = level + 1;
       Storage.saveLevel(nextLevel);
       const storedHigh = Storage.loadHighScore() || 0;
-      if(levelScore > storedHigh){
+      if (levelScore > storedHigh){
         Storage.saveHighScore(levelScore);
         currentHighScore = levelScore;
         showHighPopup("New High Score! " + levelScore);
@@ -260,56 +294,69 @@ function loop(){
       popupText.innerText = `Level ${level} completed!`;
       levelPopup.style.display = "block";
     }
-  } else ui.timeLeft.innerText = "00:00";
+  } else {
+    ui.timeLeft.innerText = "00:00";
+  }
 
+  // clear
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  updateJoystick(dt);
-
-  if(player){
-    const moveX = joyPos.x / (joyBase.offsetWidth/2);
-    const moveY = joyPos.y / (joyBase.offsetHeight/2);
-    if(Math.abs(moveX) > 0.05 || Math.abs(moveY) > 0.05){
-      player.x += moveX * player.speed * 1.2;
-      player.y += moveY * player.speed * 1.2;
-    }
-    player.update(keys, dt);
-    player.draw(ctx);
+  // player update & draw
+  if (player) { 
+    updatePlayerWithJoystick(dt); // joystick movement
+    player.update(keys, dt); 
+    player.draw(ctx); 
   }
 
+  // spawn
   spawnTimer += dt;
-  if(spawnTimer >= spawnInterval){ spawnTimer = 0; spawnEnemyByLevel(); }
+  if (spawnTimer >= spawnInterval){
+    spawnTimer = 0;
+    spawnEnemyByLevel();
+  }
 
-  for(let i=enemies.length-1;i>=0;i--){
-    const e=enemies[i]; e.update(dt,level); e.draw(ctx);
-    const pRect=player.getRect(); const r=e.getRect();
-    if(pRect.x < r.x + r.w && pRect.x + pRect.w > r.x && pRect.y < r.y + r.h && pRect.y + pRect.h > r.y){
-      enemies.splice(i,1);
-      kills++; totalHits++;
+  // update enemies
+  for (let i = enemies.length - 1; i >= 0; i--){
+    const e = enemies[i];
+    e.update(dt, level);
+    e.draw(ctx);
+
+    const pRect = player.getRect();
+    const r = e.getRect();
+    if (pRect.x < r.x + r.w && pRect.x + pRect.w > r.x && pRect.y < r.y + r.h && pRect.y + pRect.h > r.y){
+      enemies.splice(i, 1);
+      kills++;
+      totalHits++;
       const gained = scorePerType[e.type] || 10;
       levelScore += gained;
-      for(let p=0;p<12;p++){
-        const color = (e.type==="gold") ? "#ffd66b" : "#222";
-        particles.push(new Particle(e.x + (Math.random()-0.5)*e.size, e.y + (Math.random()-0.5)*e.size, color));
+      for (let p = 0; p < 12; p++){
+        const color = (e.type === "gold") ? "#ffd66b" : "#222";
+        particles.push(new Particle(e.x + (Math.random() - 0.5) * e.size, e.y + (Math.random() - 0.5) * e.size, color));
       }
-    } else if(e.isOffScreen(canvas.width)) enemies.splice(i,1);
+    } else if (e.isOffScreen(canvas.width)) {
+      enemies.splice(i, 1);
+    }
   }
 
-  for(let i=particles.length-1;i>=0;i--){
-    const p=particles[i]; p.update(dt); p.draw(ctx);
-    if(Date.now()-p.start>p.life) particles.splice(i,1);
+  // particles
+  for (let i = particles.length - 1; i >= 0; i--){
+    const p = particles[i];
+    p.update(dt);
+    p.draw(ctx);
+    if (Date.now() - p.start > p.life) particles.splice(i, 1);
   }
 
   updateUI();
 }
 
-// UI buttons
-document.getElementById("startBtn").onclick = () => { if(!running) startGame(); };
+// hook UI buttons
+document.getElementById("startBtn").onclick = () => { if (!running) startGame(); };
 document.getElementById("pauseBtn").onclick = pauseGame;
 document.getElementById("resumeBtn").onclick = resumeGame;
 document.getElementById("stopBtn").onclick = stopGame;
 document.getElementById("restartBtn").onclick = restartGame;
 
+// initial UI set
 window.onload = () => {
   currentHighScore = Storage.loadHighScore() || 0;
   ui.highScoreBox.innerText = currentHighScore;
