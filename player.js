@@ -1,88 +1,110 @@
-class Player {
+class Player{
   constructor(canvas){
     this.canvas = canvas;
-    this.x = canvas.width * 0.12;
-    this.y = canvas.height * 0.5;
-    this.size = 48;
-    this.speed = 3.6;
-    this.facing = "right"; // left or right
+    this.x = 100;
+    this.y = canvas.height / 2;
+    this.speed = 0.32;
 
-    this.img = new Image();
-    this.img.src = "images/player.png";
-    this.imgLoaded = false;
-    this.img.onload = () => { this.imgLoaded = true; };
-    this.img.onerror = () => { this.imgLoaded = false; };
+    this.width = 40;
+    this.height = 40;
+
+    this.joyX = 0;
+    this.joyY = 0;
+
+    this.initJoystick();
+  }
+
+  initJoystick(){
+    const base = document.getElementById("joystickBase");
+    const stick = document.getElementById("joystickStick");
+
+    let dragging = false;
+
+    const start = (e)=>{
+      dragging = true;
+      this.moveStick(e, base, stick);
+    };
+
+    const move = (e)=>{
+      if (!dragging) return;
+      this.moveStick(e, base, stick);
+    };
+
+    const end = ()=>{
+      dragging = false;
+      stick.style.left = "50%";
+      stick.style.top = "50%";
+      this.joyX = 0;
+      this.joyY = 0;
+    };
+
+    stick.addEventListener("touchstart", start, { passive:false });
+    stick.addEventListener("touchmove", move, { passive:false });
+    stick.addEventListener("touchend", end);
+
+    base.addEventListener("touchstart", start, { passive:false });
+    base.addEventListener("touchmove", move, { passive:false });
+    base.addEventListener("touchend", end);
+  }
+
+  moveStick(e, base, stick){
+    e.preventDefault();
+    const rect = base.getBoundingClientRect();
+    const cx = rect.left + rect.width/2;
+    const cy = rect.top + rect.height/2;
+
+    const t = e.touches[0];
+    let dx = t.clientX - cx;
+    let dy = t.clientY - cy;
+
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const max = rect.width/2;
+
+    if (dist > max){
+      dx = dx / dist * max;
+      dy = dy / dist * max;
+    }
+
+    stick.style.left = (50 + dx/max*50) + "%";
+    stick.style.top = (50 + dy/max*50) + "%";
+
+    this.joyX = dx/max;
+    this.joyY = dy/max;
   }
 
   update(keys, dt){
-    let moved = false;
-    if (keys["ArrowUp"] || keys["w"]){ this.y -= this.speed; moved = true; }
-    if (keys["ArrowDown"] || keys["s"]){ this.y += this.speed; moved = true; }
-    if (keys["ArrowLeft"] || keys["a"]){ this.x -= this.speed; this.facing = "left"; moved = true; }
-    if (keys["ArrowRight"] || keys["d"]){ this.x += this.speed; this.facing = "right"; moved = true; }
+    let mx = 0, my = 0;
 
-    // clamp
-    const half = this.size / 2;
-    this.x = Math.max(half, Math.min(this.canvas.width - half, this.x));
-    this.y = Math.max(half, Math.min(this.canvas.height - half, this.y));
+    // Keyboard
+    if (keys["ArrowUp"] || keys["w"]) my = -1;
+    if (keys["ArrowDown"] || keys["s"]) my = 1;
+    if (keys["ArrowLeft"] || keys["a"]) mx = -1;
+    if (keys["ArrowRight"] || keys["d"]) mx = 1;
+
+    // Joystick overrides
+    if (this.joyX !== 0 || this.joyY !== 0){
+      mx = this.joyX;
+      my = this.joyY;
+    }
+
+    this.x += mx * this.speed * dt;
+    this.y += my * this.speed * dt;
+
+    // bounds
+    if (this.x < 0) this.x = 0;
+    if (this.y < 0) this.y = 0;
+    if (this.x + this.width > this.canvas.width)
+      this.x = this.canvas.width - this.width;
+    if (this.y + this.height > this.canvas.height)
+      this.y = this.canvas.height - this.height;
   }
 
   draw(ctx){
-    if (this.imgLoaded){
-      ctx.save(); ctx.imageSmoothingEnabled = false;
-      if (this.facing === "left"){
-        ctx.translate(this.x, this.y);
-        ctx.scale(-1, 1);
-        ctx.drawImage(this.img, -this.size/2, -this.size/2, this.size, this.size);
-      } else {
-        ctx.drawImage(this.img, this.x - this.size/2, this.y - this.size/2, this.size, this.size);
-      }
-      ctx.restore();
-      return;
-    }
-
-    // fallback procedural (respects facing)
-    ctx.save(); ctx.imageSmoothingEnabled = false;
-    const s = this.size, px = this.x, py = this.y, block = Math.round(s / 6);
-    const map = [
-      [0,0,1,1,0,0],
-      [0,1,1,1,1,0],
-      [1,1,2,1,1,1],
-      [1,3,1,1,3,1],
-      [0,1,1,1,1,0],
-      [0,0,1,0,0,0]
-    ];
-
-    if (this.facing === "left"){
-      ctx.translate(px, py);
-      ctx.scale(-1, 1);
-      for (let r=0; r<map.length; r++){
-        for (let c=0; c<map[0].length; c++){
-          const v = map[r][c]; if(!v) continue;
-          const cx = (c-3) * block * 1.02;
-          const cy = (r-3) * block * 1.02;
-          if (v === 1) ctx.fillStyle = "#ff7a2e";
-          if (v === 2) ctx.fillStyle = "#b04d1a";
-          if (v === 3) ctx.fillStyle = "#fff9f0";
-          ctx.fillRect(cx, cy, block, block);
-        }
-      }
-    } else {
-      for (let r=0; r<map.length; r++){
-        for (let c=0; c<map[0].length; c++){
-          const v = map[r][c]; if(!v) continue;
-          const cx = px + (c-3) * block * 1.02;
-          const cy = py + (r-3) * block * 1.02;
-          if (v === 1) ctx.fillStyle = "#ff7a2e";
-          if (v === 2) ctx.fillStyle = "#b04d1a";
-          if (v === 3) ctx.fillStyle = "#fff9f0";
-          ctx.fillRect(cx, cy, block, block);
-        }
-      }
-    }
-
-    ctx.restore();
+    ctx.fillStyle = "#00eaff";
+    ctx.fillRect(this.x, this.y, this.width, this.height);
   }
 
-  getRect(){ const s = this.size; return { x: this.x - s/2, y: this.y - s/2, w: s, h: s }; }
+  getRect(){
+    return { x:this.x, y:this.y, w:this.width, h:this.height };
+  }
 }

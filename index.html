@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <title>Ant Survival</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+
   <header class="topbar">
     <img id="logoImg" src="images/logo.png" alt="logo" />
     <h1>Ant Survival</h1>
@@ -14,8 +14,7 @@
 
   <main>
     <div class="canvasWrap">
-      <!-- watermark centered behind the canvas, uses existing image "images/player.png" -->
-      <div id="watermark" aria-hidden="true"></div>
+      <div id="watermark"></div>
       <canvas id="gameCanvas" width="800" height="500"></canvas>
     </div>
 
@@ -32,7 +31,7 @@
       <button id="startBtn">Start</button>
       <button id="pauseBtn">Pause</button>
       <button id="resumeBtn">Resume</button>
-      <button id="stopBtn">Stop</button>
+      <button id="stopBtn">Stop</button</button>
       <button id="restartBtn">Restart</button>
     </div>
 
@@ -48,20 +47,21 @@
     </div>
   </div>
 
-  <!-- New highscore popup (auto vanish) -->
+  <!-- High score popup -->
   <div id="highPopup" class="popup small" style="display:none;">
     <h3 id="highPopupText">New High Score!</h3>
   </div>
 
-  <!-- JOYSTICK container (left-bottom) -->
-  <div id="joystickLeft" aria-hidden="true">
-    <div class="joyknob" id="joyLeftKnob"></div>
+  <!-- Joystick – must stay OUTSIDE main -->
+  <div id="joystickContainer">
+    <div id="joystickBase"></div>
+    <div id="joystickStick"></div>
   </div>
 
-  <!-- Scripts -->
   <script src="storage.js"></script>
   <script src="enemy.js"></script>
   <script src="player.js"></script>
   <script src="game.js"></script>
+
 </body>
 </html>
